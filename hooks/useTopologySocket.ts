@@ -27,6 +27,13 @@ export interface TopologyState {
   connectionStatus: ConnectionStatus;
 }
 
+// Edge IDs from the backend use "source->target" format. The ">" character is
+// invalid in CSS selectors, which causes a DOMException in production React when
+// it's used in markerEnd="url(#...)" or referenced via querySelector internally.
+function sanitizeId(id: string): string {
+  return id.replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
 function makeUnknownNode(id: string): Node<NodeData> {
   return {
     id,
@@ -111,7 +118,7 @@ export function useTopologySocket(): TopologyState {
         const rawEdges: Edge<EdgeData>[] = (
           msg.graph.edges as { id: string; source: string; target: string }[]
         ).map((e) => ({
-          id: e.id,
+          id: sanitizeId(e.id),
           source: e.source,
           target: e.target,
           type: 'animated' as const,
@@ -129,7 +136,7 @@ export function useTopologySocket(): TopologyState {
         const source = msg.source as string;
         const target = msg.target as string;
         const status = msg.status as 'ok' | 'error';
-        const edgeId = `${source}->${target}`;
+        const edgeId = sanitizeId(`${source}->${target}`);
 
         const event: ActivityEvent = {
           id: `${msg.traceId as string}-${animId}`,
