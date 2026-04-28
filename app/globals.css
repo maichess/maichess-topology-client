@@ -19,11 +19,6 @@ body {
   overflow: hidden;
 }
 
-@keyframes edge-pulse {
-  0%   { stroke-opacity: 0.9; }
-  100% { stroke-opacity: 0; }
-}
-
 @keyframes pulse-dot {
   0%, 100% {
     opacity: 1;

@@ -6,11 +6,11 @@ import type {
   ConnectionStatus,
   HealthInfo,
   ActivityEvent,
-  EdgeAnimation,
+  TravelingDot,
   NodeData,
   EdgeData,
 } from '@/lib/types';
-import { computeDagreLayout } from '@/lib/layout';
+import { computeDagreLayout, getNodeType, getDbFlavor } from '@/lib/layout';
 
 const WS_URL =
   process.env.NEXT_PUBLIC_TOPOLOGY_WS_URL ?? 'ws://localhost:3001/ws';
@@ -21,10 +21,15 @@ const EDGE_MARKER = {
   height: 10,
   color: 'rgba(255,255,255,0.3)',
 };
-const MAX_ACTIVITY = 50;
-const ANIM_DURATION_MS = 600;
+
+const MAX_ACTIVITY     = 500;
+const FORWARD_MS       = 1400;
+const PAUSE_MS         = 200;
+const BACKWARD_MS      = 900;
+const INTER_SPAN_MS    = 200;
+const MAX_QUEUE        = 6;
 const RECONNECT_BASE_MS = 1000;
-const RECONNECT_MAX_MS = 30_000;
+const RECONNECT_MAX_MS  = 30_000;
 
 export interface TopologyState {
   nodes: Node<NodeData>[];
@@ -42,11 +47,17 @@ function sanitizeId(id: string): string {
 }
 
 function makeUnknownNode(id: string): Node<NodeData> {
+  const nodeType = getNodeType(id);
   return {
     id,
-    type: 'service',
+    type: nodeType,
     position: { x: 0, y: 0 },
-    data: { label: id, health: { status: 'unknown', errorRate: 0 } },
+    data: {
+      label: id,
+      health: { status: 'unknown', errorRate: 0 },
+      nodeType,
+      ...(nodeType === 'database' ? { dbFlavor: getDbFlavor(id) } : {}),
+    },
   };
 }
 
@@ -66,12 +77,73 @@ export function useTopologySocket(): TopologyState {
   nodesRef.current = nodes;
   edgesRef.current = edges;
 
+  // Animation queue
+  const animQueueRef   = useRef<ActivityEvent[]>([]);
+  const isAnimatingRef = useRef<boolean>(false);
+
   useEffect(() => {
     let ws: WebSocket | null = null;
     let reconnectDelay = RECONNECT_BASE_MS;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let destroyed = false;
-    const animTimers = new Map<number, ReturnType<typeof setTimeout>>();
+
+    // Sequential animation runner — plays one span (forward dot → pause → backward dot)
+    // then calls itself for the next queued span.
+    function runNextSpan() {
+      if (animQueueRef.current.length === 0) {
+        isAnimatingRef.current = false;
+        return;
+      }
+      isAnimatingRef.current = true;
+      const span   = animQueueRef.current.shift()!;
+      const edgeId = sanitizeId(`${span.source}->${span.target}`);
+      const dotId  = `dot-${span.id}`;
+
+      function addDot(dir: 'forward' | 'backward', dur: number) {
+        const dot: TravelingDot = { dotId, direction: dir, status: span.status, duration: dur };
+        setEdges((prev) =>
+          prev.map((e) =>
+            e.id === edgeId
+              ? { ...e, data: { ...e.data!, travelingDots: [...(e.data?.travelingDots ?? []), dot] } }
+              : e,
+          ),
+        );
+      }
+
+      function removeDot() {
+        setEdges((prev) =>
+          prev.map((e) =>
+            e.id === edgeId
+              ? { ...e, data: { ...e.data!, travelingDots: (e.data?.travelingDots ?? []).filter((d) => d.dotId !== dotId) } }
+              : e,
+          ),
+        );
+      }
+
+      // Forward travel
+      addDot('forward', FORWARD_MS);
+      setTimeout(() => {
+        if (destroyed) return;
+        removeDot();
+
+        // Pause at destination
+        setTimeout(() => {
+          if (destroyed) return;
+
+          // Backward travel (response)
+          addDot('backward', BACKWARD_MS);
+          setTimeout(() => {
+            if (destroyed) return;
+            removeDot();
+
+            // Inter-span gap before next
+            setTimeout(() => {
+              if (!destroyed) runNextSpan();
+            }, INTER_SPAN_MS);
+          }, BACKWARD_MS);
+        }, PAUSE_MS);
+      }, FORWARD_MS);
+    }
 
     function connect() {
       if (destroyed) return;
@@ -113,14 +185,37 @@ export function useTopologySocket(): TopologyState {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     function handleMessage(msg: any) {
       if (msg.type === 'init') {
-        const rawNodes: Node<NodeData>[] = (
-          msg.graph.nodes as { id: string; label: string }[]
-        ).map((n) => ({
-          id: n.id,
-          type: 'service' as const,
+        // Always inject the client node — it originates REST calls to services
+        const clientNode: Node<NodeData> = {
+          id: 'client',
+          type: 'client',
           position: { x: 0, y: 0 },
-          data: { label: n.label, health: { status: 'unknown' as const, errorRate: 0 } },
-        }));
+          data: {
+            label: 'client',
+            health: { status: 'unknown', errorRate: 0 },
+            nodeType: 'client',
+          },
+        };
+
+        const rawNodes: Node<NodeData>[] = [
+          clientNode,
+          ...(msg.graph.nodes as { id: string; label: string }[])
+            .filter((n) => n.id !== 'client') // avoid duplicates if backend also sends it
+            .map((n) => {
+              const nodeType = getNodeType(n.id);
+              return {
+                id: n.id,
+                type: nodeType as string,
+                position: { x: 0, y: 0 } as const,
+                data: {
+                  label: n.label,
+                  health: { status: 'unknown' as const, errorRate: 0 },
+                  nodeType,
+                  ...(nodeType === 'database' ? { dbFlavor: getDbFlavor(n.id) } : {}),
+                },
+              };
+            }),
+        ];
 
         const rawEdges: Edge<EdgeData>[] = (
           msg.graph.edges as { id: string; source: string; target: string }[]
@@ -130,7 +225,7 @@ export function useTopologySocket(): TopologyState {
           target: e.target,
           type: 'animated' as const,
           markerEnd: EDGE_MARKER,
-          data: { animations: [] },
+          data: { travelingDots: [] },
         }));
 
         const laidOut = computeDagreLayout(rawNodes, rawEdges);
@@ -140,14 +235,14 @@ export function useTopologySocket(): TopologyState {
       }
 
       if (msg.type === 'activity') {
-        const animId = Date.now() + Math.random();
         const source = msg.source as string;
         const target = msg.target as string;
         const status = msg.status as 'ok' | 'error';
         const edgeId = sanitizeId(`${source}->${target}`);
+        const spanId = `${msg.traceId as string}-${Date.now()}-${Math.random()}`;
 
         const event: ActivityEvent = {
-          id: `${msg.traceId as string}-${animId}`,
+          id: spanId,
           traceId: msg.traceId as string,
           source,
           target,
@@ -159,24 +254,9 @@ export function useTopologySocket(): TopologyState {
 
         setRecentActivity((prev) => [event, ...prev].slice(0, MAX_ACTIVITY));
 
+        // Ensure the edge exists (create if missing)
         setEdges((prev) => {
-          const exists = prev.some((e) => e.id === edgeId);
-          if (exists) {
-            return prev.map((e) =>
-              e.id === edgeId
-                ? {
-                    ...e,
-                    data: {
-                      ...e.data!,
-                      animations: [
-                        ...(e.data?.animations ?? []),
-                        { animId, status } satisfies EdgeAnimation,
-                      ],
-                    },
-                  }
-                : e,
-            );
-          }
+          if (prev.some((e) => e.id === edgeId)) return prev;
           return [
             ...prev,
             {
@@ -185,7 +265,7 @@ export function useTopologySocket(): TopologyState {
               target,
               type: 'animated' as const,
               markerEnd: EDGE_MARKER,
-              data: { animations: [{ animId, status } satisfies EdgeAnimation] },
+              data: { travelingDots: [] },
             },
           ];
         });
@@ -211,33 +291,20 @@ export function useTopologySocket(): TopologyState {
                   target,
                   type: 'animated' as const,
                   markerEnd: EDGE_MARKER,
-                  data: { animations: [] },
+                  data: { travelingDots: [] },
                 },
               ];
           setNodes(computeDagreLayout(merged, allEdges));
         }
 
-        // Remove animation after duration
-        const timer = setTimeout(() => {
-          setEdges((prev) =>
-            prev.map((e) =>
-              e.id === edgeId
-                ? {
-                    ...e,
-                    data: {
-                      ...e.data!,
-                      animations: (e.data?.animations ?? []).filter(
-                        (a) => a.animId !== animId,
-                      ),
-                    },
-                  }
-                : e,
-            ),
-          );
-          animTimers.delete(animId);
-        }, ANIM_DURATION_MS);
-
-        animTimers.set(animId, timer);
+        // Queue span for animation; drop oldest pending if overflow
+        if (animQueueRef.current.length >= MAX_QUEUE) {
+          animQueueRef.current.shift();
+        }
+        animQueueRef.current.push(event);
+        if (!isAnimatingRef.current) {
+          runNextSpan();
+        }
         return;
       }
 
@@ -262,8 +329,7 @@ export function useTopologySocket(): TopologyState {
       destroyed = true;
       ws?.close();
       if (reconnectTimer) clearTimeout(reconnectTimer);
-      for (const t of animTimers.values()) clearTimeout(t);
-      animTimers.clear();
+      // runNextSpan timeouts guard themselves with `destroyed` — no separate tracking needed
     };
   }, []);
 
