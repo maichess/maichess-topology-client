@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import type { Node, Edge } from '@xyflow/react';
+import { MarkerType, type Node, type Edge } from '@xyflow/react';
 import type {
   ConnectionStatus,
   HealthInfo,
@@ -14,6 +14,13 @@ import { computeDagreLayout } from '@/lib/layout';
 
 const WS_URL =
   process.env.NEXT_PUBLIC_TOPOLOGY_WS_URL ?? 'ws://localhost:3001/ws';
+
+const EDGE_MARKER = {
+  type: MarkerType.Arrow,
+  width: 10,
+  height: 10,
+  color: 'rgba(255,255,255,0.3)',
+};
 const MAX_ACTIVITY = 50;
 const ANIM_DURATION_MS = 600;
 const RECONNECT_BASE_MS = 1000;
@@ -122,6 +129,7 @@ export function useTopologySocket(): TopologyState {
           source: e.source,
           target: e.target,
           type: 'animated' as const,
+          markerEnd: EDGE_MARKER,
           data: { animations: [] },
         }));
 
@@ -176,6 +184,7 @@ export function useTopologySocket(): TopologyState {
               source,
               target,
               type: 'animated' as const,
+              markerEnd: EDGE_MARKER,
               data: { animations: [{ animId, status } satisfies EdgeAnimation] },
             },
           ];
@@ -201,6 +210,7 @@ export function useTopologySocket(): TopologyState {
                   source,
                   target,
                   type: 'animated' as const,
+                  markerEnd: EDGE_MARKER,
                   data: { animations: [] },
                 },
               ];
