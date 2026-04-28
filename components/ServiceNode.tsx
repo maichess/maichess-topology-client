@@ -4,31 +4,16 @@ import { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import type { NodeData } from '@/lib/types';
 
-const STATUS_STYLES: Record<
-  string,
-  { border: string; shadow: string }
-> = {
-  healthy: {
-    border: '#22c55e',
-    shadow: '0 0 8px 2px rgba(34,197,94,0.5)',
-  },
-  degraded: {
-    border: '#eab308',
-    shadow: '0 0 8px 2px rgba(234,179,8,0.5)',
-  },
-  down: {
-    border: '#ef4444',
-    shadow: '0 0 8px 2px rgba(239,68,68,0.5)',
-  },
-  unknown: {
-    border: '#374151',
-    shadow: 'none',
-  },
+const STATUS_DOT: Record<string, { color: string }> = {
+  healthy: { color: '#22c55e' },
+  degraded: { color: '#eab308' },
+  down:     { color: '#ef4444' },
+  unknown:  { color: '#374151' },
 };
 
 function ServiceNode({ data }: NodeProps) {
   const nodeData = data as NodeData;
-  const style = STATUS_STYLES[nodeData.health.status] ?? STATUS_STYLES.unknown;
+  const dot = STATUS_DOT[nodeData.health.status] ?? STATUS_DOT.unknown;
 
   return (
     <div
@@ -36,8 +21,7 @@ function ServiceNode({ data }: NodeProps) {
         width: 200,
         height: 60,
         background: '#0d0d17',
-        border: `1px solid ${style.border}`,
-        boxShadow: style.shadow,
+        border: '1px solid #374151',
         borderRadius: 3,
         display: 'flex',
         flexDirection: 'column',
@@ -48,21 +32,38 @@ function ServiceNode({ data }: NodeProps) {
         padding: '0 12px',
       }}
     >
-      <span
+      <div
         style={{
-          color: '#e5e7eb',
-          fontSize: 13,
-          fontWeight: 600,
-          letterSpacing: '0.02em',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 7,
           width: '100%',
-          textAlign: 'center',
+          overflow: 'hidden',
         }}
       >
-        {nodeData.label}
-      </span>
+        <span
+          style={{
+            flexShrink: 0,
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: dot.color,
+          }}
+        />
+        <span
+          style={{
+            color: '#e5e7eb',
+            fontSize: 13,
+            fontWeight: 600,
+            letterSpacing: '0.02em',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {nodeData.label}
+        </span>
+      </div>
       {nodeData.health.errorRate > 0 && (
         <span
           style={{
