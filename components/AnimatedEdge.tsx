@@ -24,8 +24,10 @@ function AnimatedEdge({
     targetPosition,
   });
 
-  const pathId = `edge-path-${id}`;
-  const markerId = `arrow-${id}`;
+  // Sanitize: HTML element IDs and URL fragments cannot contain chars like > < spaces
+  const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const pathId = `edge-path-${safeId}`;
+  const markerId = `arrow-${safeId}`;
 
   return (
     <>
