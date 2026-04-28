@@ -53,6 +53,8 @@ export function computeDagreLayout(
   return nodes.map((node) => {
     const pos = g.node(node.id);
     const dims = NODE_DIMS[node.data.nodeType ?? 'service'];
+    // Dagre may return undefined/NaN for isolated nodes (no edges); keep existing position
+    if (!pos || typeof pos.x !== 'number' || isNaN(pos.x)) return node;
     return {
       ...node,
       position: {

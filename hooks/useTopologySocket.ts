@@ -163,8 +163,8 @@ export function useTopologySocket(): TopologyState {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const msg = JSON.parse(event.data as string) as any;
           handleMessage(msg);
-        } catch {
-          // malformed message — ignore
+        } catch (err) {
+          console.error('[topology] message handling error:', err);
         }
       };
 
