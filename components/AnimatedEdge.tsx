@@ -24,6 +24,8 @@ function AnimatedEdge({
     targetPosition,
   });
 
+  if (!edgePath) return null;
+
   return (
     <>
       {/* Base edge — always visible, dim */}
