@@ -18,7 +18,7 @@ function ServiceNode({ data }: NodeProps) {
   return (
     <div
       style={{
-        width: 180,
+        width: 200,
         height: 60,
         background: '#0d0d17',
         border: '1px solid #374151',
@@ -76,11 +76,17 @@ function ServiceNode({ data }: NodeProps) {
           ERR: {(nodeData.health.errorRate * 100).toFixed(1)}%
         </span>
       )}
-      {/* Handles on all 4 sides to support TB and LR edge routing */}
-      <Handle type="target" position={Position.Top}    style={{ opacity: 0, pointerEvents: 'none' }} />
-      <Handle type="source" position={Position.Bottom} style={{ opacity: 0, pointerEvents: 'none' }} />
-      <Handle type="target" position={Position.Left}   style={{ opacity: 0, pointerEvents: 'none' }} />
-      <Handle type="source" position={Position.Right}  style={{ opacity: 0, pointerEvents: 'none' }} />
+      {/* Handles are required for edges to attach correctly */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        style={{ opacity: 0, pointerEvents: 'none' }}
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        style={{ opacity: 0, pointerEvents: 'none' }}
+      />
     </div>
   );
 }

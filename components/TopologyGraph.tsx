@@ -10,19 +10,13 @@ import {
   type Edge,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import ServiceNode  from './ServiceNode';
-import ClientNode   from './ClientNode';
-import DatabaseNode from './DatabaseNode';
+import ServiceNode from './ServiceNode';
 import AnimatedEdge from './AnimatedEdge';
 import type { NodeData, EdgeData } from '@/lib/types';
 
 // Must be module-level constants — defining inside the component causes
 // React Flow to re-register types on every render (warning + visual glitch)
-const nodeTypes = {
-  service:  ServiceNode,
-  client:   ClientNode,
-  database: DatabaseNode,
-};
+const nodeTypes = { service: ServiceNode };
 const edgeTypes = { animated: AnimatedEdge };
 
 interface TopologyGraphProps {

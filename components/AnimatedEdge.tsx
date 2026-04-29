@@ -2,12 +2,7 @@
 
 import { memo } from 'react';
 import { getBezierPath, type EdgeProps } from '@xyflow/react';
-import type { EdgeData, TravelingDot } from '@/lib/types';
-
-const DOT_COLOR: Record<'ok' | 'error', { forward: string; backward: string }> = {
-  ok:    { forward: '#22c55e', backward: '#166534' },
-  error: { forward: '#ef4444', backward: '#7f1d1d' },
-};
+import type { EdgeData } from '@/lib/types';
 
 function AnimatedEdge({
   sourceX,
@@ -31,8 +26,6 @@ function AnimatedEdge({
 
   if (!edgePath) return null;
 
-  const dots: TravelingDot[] = edgeData?.travelingDots ?? [];
-
   return (
     <>
       {/* Base edge — always visible, dim */}
@@ -44,26 +37,20 @@ function AnimatedEdge({
         markerEnd={markerEnd}
       />
 
-      {/* Traveling dot per queued span — animateMotion follows the bezier path */}
-      {dots.map(({ dotId, direction, status, duration }) => {
-        const colors = DOT_COLOR[status];
-        const fill = direction === 'forward' ? colors.forward : colors.backward;
-        const kp   = direction === 'forward' ? '0;1' : '1;0';
-        return (
-          <circle key={dotId} r={5} fill={fill} style={{ pointerEvents: 'none' }}>
-            {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
-            {/* @ts-ignore — `path` is a valid SMIL animateMotion attribute */}
-            <animateMotion
-              path={edgePath}
-              dur={`${duration}ms`}
-              fill="freeze"
-              keyPoints={kp}
-              keyTimes="0;1"
-              calcMode="linear"
-            />
-          </circle>
-        );
-      })}
+      {/* Activity pulse — one per in-flight trace, fades out over 600ms */}
+      {(edgeData?.animations ?? []).map(({ animId, status }) => (
+        <path
+          key={animId}
+          d={edgePath}
+          fill="none"
+          stroke={status === 'ok' ? '#22c55e' : '#ef4444'}
+          strokeWidth={3}
+          style={{
+            pointerEvents: 'none',
+            animation: 'edge-pulse 0.6s ease-out forwards',
+          }}
+        />
+      ))}
     </>
   );
 }

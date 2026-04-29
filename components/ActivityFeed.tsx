@@ -1,47 +1,14 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import type { ActivityEvent, TraceGroup } from '@/lib/types';
+import { useState } from 'react';
+import type { ActivityEvent } from '@/lib/types';
 
 interface ActivityFeedProps {
   activities: ActivityEvent[];
 }
 
-function groupByTrace(activities: ActivityEvent[]): TraceGroup[] {
-  const map = new Map<string, TraceGroup>();
-  for (const a of activities) {
-    if (!map.has(a.traceId)) {
-      map.set(a.traceId, {
-        traceId: a.traceId,
-        spans: [],
-        firstTs: a.ts,
-        lastStatus: 'ok',
-      });
-    }
-    const g = map.get(a.traceId)!;
-    g.spans.push(a);
-    if (a.ts < g.firstTs) g.firstTs = a.ts;
-    if (a.status === 'error') g.lastStatus = 'error';
-  }
-  return Array.from(map.values())
-    .sort((a, b) => b.firstTs - a.firstTs)
-    .slice(0, 50);
-}
-
 export default function ActivityFeed({ activities }: ActivityFeedProps) {
   const [collapsed, setCollapsed] = useState(false);
-  const [expandedTraces, setExpandedTraces] = useState<Set<string>>(new Set());
-
-  const traces = useMemo(() => groupByTrace(activities), [activities]);
-
-  function toggleTrace(traceId: string) {
-    setExpandedTraces((prev) => {
-      const next = new Set(prev);
-      if (next.has(traceId)) next.delete(traceId);
-      else next.add(traceId);
-      return next;
-    });
-  }
 
   return (
     <div
@@ -105,7 +72,7 @@ export default function ActivityFeed({ activities }: ActivityFeedProps) {
             textTransform: 'uppercase',
           }}
         >
-          Traces
+          Activity Feed
         </span>
         <span
           style={{
@@ -115,13 +82,13 @@ export default function ActivityFeed({ activities }: ActivityFeedProps) {
             fontFamily: 'var(--font-geist-mono)',
           }}
         >
-          {traces.length}
+          {activities.length}
         </span>
       </div>
 
-      {/* Trace list */}
+      {/* Activity list */}
       <div style={{ overflowY: 'auto', flex: 1 }}>
-        {traces.length === 0 ? (
+        {activities.length === 0 ? (
           <div
             style={{
               padding: '24px 12px',
@@ -134,120 +101,64 @@ export default function ActivityFeed({ activities }: ActivityFeedProps) {
             Waiting for activity...
           </div>
         ) : (
-          traces.map((group) => {
-            const isExpanded = expandedTraces.has(group.traceId);
-            const shortId = group.traceId.slice(0, 8);
-            return (
+          activities.map((a) => (
+            <div
+              key={a.id}
+              style={{
+                padding: '5px 12px',
+                borderBottom: '1px solid rgba(255,255,255,0.04)',
+                fontFamily: 'var(--font-geist-mono)',
+              }}
+            >
               <div
-                key={group.traceId}
-                style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 4,
+                }}
               >
-                {/* Trace header row */}
-                <div
-                  onClick={() => toggleTrace(group.traceId)}
+                <span
                   style={{
-                    padding: '6px 12px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 6,
-                    fontFamily: 'var(--font-geist-mono)',
-                    userSelect: 'none',
+                    fontSize: 11,
+                    color: '#9ca3af',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    flex: 1,
                   }}
                 >
-                  <span style={{ fontSize: 10, color: '#6b7280', flexShrink: 0 }}>
-                    {isExpanded ? '▾' : '▸'}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 10,
-                      color: '#9ca3af',
-                      flex: 1,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {shortId}
-                  </span>
-                  <span style={{ fontSize: 9, color: '#4b5563', flexShrink: 0 }}>
-                    {group.spans.length}
-                  </span>
-                  <span
-                    style={{
-                      color: group.lastStatus === 'ok' ? '#22c55e' : '#ef4444',
-                      fontSize: 8,
-                      flexShrink: 0,
-                    }}
-                  >
-                    ●
-                  </span>
-                </div>
-
-                {/* Expanded span list */}
-                {isExpanded &&
-                  group.spans.map((a) => (
-                    <div
-                      key={a.id}
-                      style={{
-                        padding: '4px 12px 4px 24px',
-                        borderTop: '1px solid rgba(255,255,255,0.03)',
-                        fontFamily: 'var(--font-geist-mono)',
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: 4,
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: 10,
-                            color: '#9ca3af',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            flex: 1,
-                          }}
-                        >
-                          <span style={{ color: '#6b7280' }}>{a.source}</span>
-                          <span style={{ color: '#374151', margin: '0 3px' }}>→</span>
-                          <span style={{ color: '#6b7280' }}>{a.target}</span>
-                        </span>
-                        <span
-                          style={{
-                            color: a.status === 'ok' ? '#22c55e' : '#ef4444',
-                            fontSize: 8,
-                            flexShrink: 0,
-                          }}
-                        >
-                          ●
-                        </span>
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 9,
-                          color: '#4b5563',
-                          marginTop: 1,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {a.rpcMethod}
-                        <span style={{ color: '#374151', marginLeft: 6 }}>
-                          {a.duration}ms
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                  <span style={{ color: '#6b7280' }}>{a.source}</span>
+                  <span style={{ color: '#374151', margin: '0 3px' }}>→</span>
+                  <span style={{ color: '#6b7280' }}>{a.target}</span>
+                </span>
+                <span
+                  style={{
+                    color: a.status === 'ok' ? '#22c55e' : '#ef4444',
+                    fontSize: 8,
+                    flexShrink: 0,
+                  }}
+                >
+                  ●
+                </span>
               </div>
-            );
-          })
+              <div
+                style={{
+                  fontSize: 10,
+                  color: '#4b5563',
+                  marginTop: 1,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {a.rpcMethod}
+                <span style={{ color: '#374151', marginLeft: 6 }}>
+                  {a.duration}ms
+                </span>
+              </div>
+            </div>
+          ))
         )}
       </div>
     </div>
